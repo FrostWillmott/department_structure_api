@@ -36,8 +36,9 @@ async def _get_descendants_ids(db: AsyncSession, dept_id: int) -> set[int]:
         )
         queue = []
         for (child_id,) in rows:
-            result.add(child_id)
-            queue.append(child_id)
+            if child_id not in result:
+                result.add(child_id)
+                queue.append(child_id)
     return result
 
 
@@ -223,6 +224,7 @@ async def delete_department(
             .values(department_id=reassign_to_id)
         )
 
+    # passive_deletes=True: не трогаем Employee через ORM, каскад на стороне БД.
     await db.delete(dept)
     await db.commit()
     logger.info("Deleted department id=%d mode=%s", dept_id, mode)

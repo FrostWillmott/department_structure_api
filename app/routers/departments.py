@@ -30,15 +30,16 @@ router = APIRouter()
     "/",
     response_model=DepartmentBase,
     status_code=201,
-    summary="Create a department",
+    summary="Создать отдел",
     description=(
-        "Creates a new department. "
-        "The name is trimmed and must be unique within the same parent scope. "
-        "Pass `parent_id: null` (or omit it) to create a root-level department."
+        "Создаёт новый отдел. "
+        "Название обрезается и должно быть уникальным в пределах одного родителя. "
+        "Передайте `parent_id: null` (или не указывайте), "
+        "чтобы создать корневой отдел."
     ),
     responses={
-        404: {"description": "Parent department not found"},
-        409: {"description": "Duplicate department name within the same parent"},
+        404: {"description": "Родительский отдел не найден"},
+        409: {"description": "Дублирующееся название в пределах одного родителя"},
     },
 )
 async def create_department(
@@ -57,29 +58,30 @@ async def create_department(
 @router.get(
     "/{dept_id}",
     response_model=DepartmentDetail,
-    summary="Get department details",
+    summary="Получить данные отдела",
     description=(
-        "Returns a department with its employees and a nested subtree "
-        "of child departments. "
-        "`depth` controls how many levels of children are included (1–5). "
-        "Set `include_employees=false` to omit employee lists from all levels."
+        "Возвращает отдел с его сотрудниками и вложенным поддеревом "
+        "дочерних отделов. "
+        "`depth` задаёт количество уровней вложенности дочерних отделов (1–5). "
+        "Установите `include_employees=false`, "
+        "чтобы исключить списки сотрудников со всех уровней."
     ),
     responses={
-        404: {"description": "Department not found"},
+        404: {"description": "Отдел не найден"},
     },
 )
 async def get_department(
     dept_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     depth: Annotated[
-        int, Query(ge=1, le=5, description="Nesting depth for child departments")
+        int, Query(ge=1, le=5, description="Глубина вложенности дочерних отделов")
     ] = 1,
     include_employees: Annotated[
-        bool, Query(description="Include employees in the response")
+        bool, Query(description="Включить сотрудников в ответ")
     ] = True,
     sort_employees_by: Annotated[
         Literal["created_at", "full_name"],
-        Query(description="Field to sort employees by"),
+        Query(description="Поле для сортировки сотрудников"),
     ] = "created_at",
 ) -> DepartmentDetail:
     try:
@@ -93,17 +95,17 @@ async def get_department(
 @router.patch(
     "/{dept_id}",
     response_model=DepartmentBase,
-    summary="Update a department",
+    summary="Обновить отдел",
     description=(
-        "Partially updates a department. Both fields are optional — "
-        "only provided fields are changed. "
-        "To move a department to root, explicitly pass `parent_id: null`. "
-        "Moving is rejected if it would create a cycle in the department tree."
+        "Частично обновляет отдел. Оба поля необязательны — "
+        "изменяются только переданные поля. "
+        "Чтобы переместить отдел в корень, явно передайте `parent_id: null`. "
+        "Перемещение отклоняется, если создаёт цикл в дереве отделов."
     ),
     responses={
-        400: {"description": "Department cannot be its own parent"},
-        404: {"description": "Department or new parent not found"},
-        409: {"description": "Name conflict or cycle detected"},
+        400: {"description": "Отдел не может быть своим собственным родителем"},
+        404: {"description": "Отдел или новый родитель не найден"},
+        409: {"description": "Конфликт имён или обнаружен цикл"},
     },
 )
 async def update_department(
@@ -125,29 +127,31 @@ async def update_department(
 @router.delete(
     "/{dept_id}",
     status_code=204,
-    summary="Delete a department",
+    summary="Удалить отдел",
     description=(
-        "Deletes a department in one of two modes:\n\n"
-        "- **cascade** — deletes the department, all its child departments "
-        "recursively, and all their employees.\n"
-        "- **reassign** — moves the direct employees of this department to "
-        "`reassign_to_department_id`, then deletes the department "
-        "(child departments and their employees are still cascade-deleted).\n\n"
-        "`reassign_to_department_id` is required when `mode=reassign`."
+        "Удаляет отдел в одном из двух режимов:\n\n"
+        "- **cascade** — удаляет отдел, все дочерние отделы рекурсивно "
+        "и всех их сотрудников.\n"
+        "- **reassign** — перемещает прямых сотрудников этого отдела в "
+        "`reassign_to_department_id`, затем удаляет отдел "
+        "(дочерние отделы и их сотрудники всё равно каскадно удаляются).\n\n"
+        "`reassign_to_department_id` обязателен при `mode=reassign`."
     ),
     responses={
-        204: {"description": "Department deleted"},
-        400: {"description": "reassign_to_department_id missing for mode=reassign"},
-        404: {"description": "Department or reassign target not found"},
+        204: {"description": "Отдел удалён"},
+        400: {"description": "reassign_to_department_id отсутствует для mode=reassign"},
+        404: {"description": "Отдел или цель переназначения не найдены"},
     },
 )
 async def delete_department(
     dept_id: int,
-    mode: Annotated[Literal["cascade", "reassign"], Query(description="Deletion mode")],
+    mode: Annotated[
+        Literal["cascade", "reassign"], Query(description="Режим удаления")
+    ],
     db: Annotated[AsyncSession, Depends(get_db)],
     reassign_to_department_id: Annotated[
         int | None,
-        Query(description="Target department ID (required when mode=reassign)"),
+        Query(description="ID целевого отдела (обязателен при mode=reassign)"),
     ] = None,
 ) -> Response:
     try:

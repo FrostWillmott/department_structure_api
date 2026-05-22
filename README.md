@@ -1,81 +1,81 @@
 # Department Structure API
 
-REST API for managing organizational structure: hierarchical departments and employees.
+REST API для управления организационной структурой: иерархические отделы и сотрудники.
 
-## Tech stack
+## Технологии
 
-- **FastAPI** — async web framework
-- **SQLAlchemy 2.0** (async) + **asyncpg** — database access
-- **PostgreSQL 16** — primary database
-- **Alembic** — migrations
-- **pydantic-settings** — configuration
-- **ruff** + **mypy** — linting and type checking
-- **pytest** + **pytest-asyncio** + **httpx** — testing
+- **FastAPI** — асинхронный веб-фреймворк
+- **SQLAlchemy 2.0** (async) + **asyncpg** — доступ к базе данных
+- **PostgreSQL 16** — основная база данных
+- **Alembic** — миграции
+- **pydantic-settings** — конфигурация
+- **ruff** + **mypy** — линтинг и проверка типов
+- **pytest** + **pytest-asyncio** + **httpx** — тестирование
 
-## Quick start
+## Быстрый старт
 
 ```bash
 docker-compose up --build
 ```
 
-The application will be available at [http://localhost:8000](http://localhost:8000).  
-Interactive API documentation: [http://localhost:8000/docs](http://localhost:8000/docs).
+Приложение будет доступно по адресу [http://localhost:8000](http://localhost:8000).  
+Интерактивная документация API: [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Migrations run automatically on container startup.
+Миграции запускаются автоматически при старте контейнера.
 
-## Local development
+## Локальная разработка
 
-**Requirements:** Python 3.12+, [uv](https://docs.astral.sh/uv/), PostgreSQL running on localhost:5432.
+**Требования:** Python 3.12+, [uv](https://docs.astral.sh/uv/), PostgreSQL на localhost:5432.
 
 ```bash
-# Install dependencies
+# Установка зависимостей
 uv sync --extra dev
 
-# Setup pre-commit hooks
+# Установка pre-commit хуков
 uv run pre-commit install
 
-# Configure database URL
+# Настройка URL базы данных
 cp .env.example .env
-# Edit .env if needed
+# При необходимости отредактируйте .env
 
-# Run migrations
+# Запуск миграций
 uv run alembic upgrade head
 
-# Start dev server
+# Запуск сервера разработки
 uv run uvicorn main:app --reload
 ```
 
-## Running tests
+## Запуск тестов
 
-Tests run in Docker against a dedicated PostgreSQL instance — no local setup required:
+Тесты запускаются в Docker против выделенного экземпляра PostgreSQL — локальная настройка не требуется:
 
 ```bash
 docker compose --profile test up --build --abort-on-container-exit --exit-code-from test
 ```
 
-Coverage report is printed in the container output.
+Отчёт о покрытии выводится в логах контейнера.
 
-## Environment variables
+## Переменные окружения
 
-| Variable | Default | Description |
+| Переменная | По умолчанию | Описание |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api` | Async PostgreSQL connection URL |
-| `TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test` | Test database URL (set automatically in Docker) |
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api` | Асинхронный URL подключения к PostgreSQL |
+| `TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test` | URL тестовой базы (устанавливается автоматически в Docker) |
 
-## API overview
+## Обзор API
 
-| Method | Path | Description |
+| Метод | Путь | Описание |
 |---|---|---|
-| `POST` | `/departments/` | Create a department |
-| `GET` | `/departments/{id}` | Get department with employees and subtree |
-| `PATCH` | `/departments/{id}` | Rename or move a department |
-| `DELETE` | `/departments/{id}` | Delete (cascade or reassign mode) |
-| `POST` | `/departments/{id}/employees/` | Add an employee to a department |
+| `POST` | `/departments/` | Создать отдел |
+| `GET` | `/departments/{id}` | Получить отдел с сотрудниками и поддеревом |
+| `PATCH` | `/departments/{id}` | Переименовать или переместить отдел |
+| `DELETE` | `/departments/{id}` | Удалить (каскадный или режим переназначения) |
+| `POST` | `/departments/{id}/employees/` | Добавить сотрудника в отдел |
 
-### Key behaviours
+### Ключевые особенности
 
-- Department names are **unique within the same parent** scope.
-- Moving a department is rejected if it would create a **cycle** in the tree.
-- `GET /departments/{id}` accepts `depth` (1–5), `include_employees`, and `sort_employees_by` query parameters.
-- `DELETE` with `mode=cascade` removes the department, all child departments, and all their employees.
-- `DELETE` with `mode=reassign` moves the department's direct employees to `reassign_to_department_id` before deletion.
+- Названия отделов **уникальны в пределах одного родителя**.
+- Перемещение отклоняется, если создаёт **цикл** в дереве.
+- `GET /departments/{id}` принимает параметры `depth` (1–5), `include_employees` и `sort_employees_by`.
+- `DELETE` с `mode=cascade` удаляет отдел, все дочерние отделы и всех их сотрудников.
+- `DELETE` с `mode=reassign` перемещает прямых сотрудников в `reassign_to_department_id` перед удалением.

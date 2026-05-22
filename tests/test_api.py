@@ -212,6 +212,24 @@ async def test_patch_duplicate_name(client: AsyncClient) -> None:
     assert resp.status_code == 409
 
 
+async def test_patch_move_to_parent_with_same_name(client: AsyncClient) -> None:
+    parent_a = (await client.post("/departments/", json={"name": "Division A"})).json()
+    parent_b = (await client.post("/departments/", json={"name": "Division B"})).json()
+    dept_a = (
+        await client.post(
+            "/departments/", json={"name": "Backend", "parent_id": parent_a["id"]}
+        )
+    ).json()
+    await client.post(
+        "/departments/", json={"name": "Backend", "parent_id": parent_b["id"]}
+    )
+
+    resp = await client.patch(
+        f"/departments/{dept_a['id']}", json={"parent_id": parent_b["id"]}
+    )
+    assert resp.status_code == 409
+
+
 async def test_delete_not_found(client: AsyncClient) -> None:
     resp = await client.delete("/departments/9999?mode=cascade")
     assert resp.status_code == 404

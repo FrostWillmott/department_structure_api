@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,8 +7,6 @@ from app.database import get_db
 from app.exceptions import DepartmentNotFoundError
 from app.schemas import EmployeeCreate, EmployeeResponse
 from app.services import departments as svc
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

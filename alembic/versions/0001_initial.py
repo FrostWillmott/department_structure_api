@@ -38,6 +38,20 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_departments_parent_id", "departments", ["parent_id"])
+    op.create_index(
+        "uq_departments_name_parent",
+        "departments",
+        ["name", "parent_id"],
+        unique=True,
+        postgresql_where=sa.text("parent_id IS NOT NULL"),
+    )
+    op.create_index(
+        "uq_departments_name_root",
+        "departments",
+        ["name"],
+        unique=True,
+        postgresql_where=sa.text("parent_id IS NULL"),
+    )
 
     op.create_table(
         "employees",
@@ -65,5 +79,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_employees_department_id", table_name="employees")
     op.drop_table("employees")
+    op.drop_index("uq_departments_name_root", table_name="departments")
+    op.drop_index("uq_departments_name_parent", table_name="departments")
     op.drop_index("ix_departments_parent_id", table_name="departments")
     op.drop_table("departments")

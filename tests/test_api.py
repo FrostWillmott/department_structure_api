@@ -323,3 +323,52 @@ async def test_create_employee_with_hired_at(client: AsyncClient) -> None:
     )
     assert resp.status_code == 201
     assert resp.json()["hired_at"] == "2023-01-15"
+
+
+async def test_get_department_depth_out_of_range(client: AsyncClient) -> None:
+    dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
+    assert (await client.get(f"/departments/{dept['id']}?depth=0")).status_code == 422
+    assert (await client.get(f"/departments/{dept['id']}?depth=6")).status_code == 422
+
+
+async def test_create_department_rejects_whitespace_only_name(
+    client: AsyncClient,
+) -> None:
+    resp = await client.post("/departments/", json={"name": "   "})
+    assert resp.status_code == 422
+
+
+async def test_delete_cascade_removes_nested_employees(client: AsyncClient) -> None:
+    root = (await client.post("/departments/", json={"name": "Root"})).json()
+    child = (
+        await client.post(
+            "/departments/", json={"name": "Child", "parent_id": root["id"]}
+        )
+    ).json()
+    grandchild = (
+        await client.post(
+            "/departments/", json={"name": "Grandchild", "parent_id": child["id"]}
+        )
+    ).json()
+    await client.post(
+        f"/departments/{grandchild['id']}/employees/",
+        json={"full_name": "Ivan", "position": "Dev"},
+    )
+
+    resp = await client.delete(f"/departments/{root['id']}?mode=cascade")
+    assert resp.status_code == 204
+
+    assert (await client.get(f"/departments/{child['id']}")).status_code == 404
+    assert (await client.get(f"/departments/{grandchild['id']}")).status_code == 404
+
+
+async def test_get_employees_default_sort_by_created_at(client: AsyncClient) -> None:
+    dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
+    for name in ("Charlie", "Bob", "Alice"):
+        await client.post(
+            f"/departments/{dept['id']}/employees/",
+            json={"full_name": name, "position": "Dev"},
+        )
+    resp = await client.get(f"/departments/{dept['id']}")
+    names = [e["full_name"] for e in resp.json()["employees"]]
+    assert names == ["Charlie", "Bob", "Alice"]

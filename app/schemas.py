@@ -84,16 +84,29 @@ class EmployeeResponse(BaseModel):
     created_at: datetime = Field(..., description="UTC timestamp of creation")
 
 
-class DepartmentDetail(DepartmentBase):
-    """Detailed department response including employees and child departments."""
+class DepartmentTreeNode(DepartmentBase):
+    """Department node for recursive subtree responses."""
 
+    children: list["DepartmentTreeNode"] = Field(
+        default_factory=list,
+        description="Child departments recursively nested up to the requested depth.",
+    )
+
+
+class DepartmentTreeResponse(BaseModel):
+    """Department detail response matching the assignment contract."""
+
+    department: DepartmentBase = Field(
+        ...,
+        description="Requested department details.",
+    )
     employees: list[EmployeeResponse] = Field(
         default_factory=list,
-        description="Department employees, sorted by the sort_employees_by parameter.",
+        description="Employees of the requested department.",
     )
-    children: list["DepartmentDetail"] = Field(
+    children: list[DepartmentTreeNode] = Field(
         default_factory=list,
-        description="Child departments, recursively nested up to the requested depth.",
+        description="Nested child departments up to the requested depth.",
     )
 
 

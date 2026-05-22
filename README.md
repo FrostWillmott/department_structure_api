@@ -59,8 +59,10 @@ docker compose --profile test up --build --abort-on-container-exit --exit-code-f
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api` | Асинхронный URL подключения к PostgreSQL |
-| `TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test` | URL тестовой базы (устанавливается автоматически в Docker) |
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api` | URL БД для локального запуска приложения и миграций |
+| `TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test` | URL БД для локального запуска тестов |
+| `COMPOSE_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@db:5432/department_api` | URL БД для сервиса `app` внутри `docker compose` |
+| `COMPOSE_TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@db_test:5432/department_api_test` | URL БД для сервиса `test` внутри `docker compose --profile test` |
 
 ## Обзор API
 
@@ -76,6 +78,41 @@ docker compose --profile test up --build --abort-on-container-exit --exit-code-f
 
 - Названия отделов **уникальны в пределах одного родителя**.
 - Перемещение отклоняется, если создаёт **цикл** в дереве.
-- `GET /departments/{id}` принимает параметры `depth` (1–5), `include_employees` и `sort_employees_by`.
+- `GET /departments/{id}` принимает параметры `depth` (1–5), `include_employees` и `sort_employees_by`, и возвращает объект вида:
+  - `department` — данные запрошенного отдела
+  - `employees` — сотрудники запрошенного отдела (опционально, в зависимости от `include_employees`)
+  - `children` — рекурсивное поддерево дочерних отделов
+
+Пример ответа `GET /departments/{id}`:
+
+```json
+{
+  "department": {
+    "id": 1,
+    "name": "Engineering",
+    "parent_id": null,
+    "created_at": "2026-05-21T10:00:00Z"
+  },
+  "employees": [
+    {
+      "id": 10,
+      "department_id": 1,
+      "full_name": "Ivan Ivanov",
+      "position": "Backend Developer",
+      "hired_at": "2024-02-01",
+      "created_at": "2026-05-21T10:01:00Z"
+    }
+  ],
+  "children": [
+    {
+      "id": 2,
+      "name": "Platform",
+      "parent_id": 1,
+      "created_at": "2026-05-21T10:02:00Z",
+      "children": []
+    }
+  ]
+}
+```
 - `DELETE` с `mode=cascade` удаляет отдел, все дочерние отделы и всех их сотрудников.
 - `DELETE` с `mode=reassign` перемещает прямых сотрудников в `reassign_to_department_id` перед удалением.

@@ -83,6 +83,8 @@ async def test_get_department_tree(client: AsyncClient) -> None:
     resp = await client.get(f"/departments/{parent['id']}?depth=2")
     assert resp.status_code == 200
     data = resp.json()
+    assert data["department"]["id"] == parent["id"]
+    assert data["department"]["name"] == "Engineering"
     assert len(data["children"]) == 1
     assert data["children"][0]["id"] == child["id"]
     assert len(data["employees"]) == 1

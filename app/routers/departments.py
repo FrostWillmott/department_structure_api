@@ -17,7 +17,7 @@ from app.exceptions import (
 from app.schemas import (
     DepartmentBase,
     DepartmentCreate,
-    DepartmentDetail,
+    DepartmentTreeResponse,
     DepartmentUpdate,
 )
 from app.services import departments as svc
@@ -58,7 +58,7 @@ async def create_department(
 
 @router.get(
     "/{dept_id}",
-    response_model=DepartmentDetail,
+    response_model=DepartmentTreeResponse,
     summary="Получить данные отдела",
     description=(
         "Возвращает отдел с его сотрудниками и вложенным поддеревом "
@@ -84,7 +84,7 @@ async def get_department(
         Literal["created_at", "full_name"],
         Query(description="Поле для сортировки сотрудников"),
     ] = "created_at",
-) -> DepartmentDetail:
+) -> DepartmentTreeResponse:
     try:
         return await svc.get_department_tree(
             db, dept_id, depth, include_employees, sort_employees_by

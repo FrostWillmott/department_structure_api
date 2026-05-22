@@ -16,8 +16,10 @@ from app.exceptions import (
 )
 from app.models import Department, Employee
 from app.schemas import (
+    DepartmentBase,
     DepartmentCreate,
-    DepartmentDetail,
+    DepartmentTreeNode,
+    DepartmentTreeResponse,
     DepartmentUpdate,
     EmployeeCreate,
     EmployeeResponse,
@@ -88,8 +90,8 @@ async def get_department_tree(
     depth: int,
     include_employees: bool,
     sort_by: Literal["created_at", "full_name"],
-) -> DepartmentDetail:
-    """Return a department with nested children and optional employee lists."""
+) -> DepartmentTreeResponse:
+    """Return department details, employees and nested child departments."""
     base = (
         select(
             Department.id,
@@ -117,8 +119,8 @@ async def get_department_tree(
     if not rows:
         raise DepartmentNotFoundError(dept_id)
 
-    dept_map: dict[int, DepartmentDetail] = {
-        row.id: DepartmentDetail(
+    dept_map: dict[int, DepartmentTreeNode] = {
+        row.id: DepartmentTreeNode(
             id=row.id,
             name=row.name,
             parent_id=row.parent_id,
@@ -126,26 +128,32 @@ async def get_department_tree(
         )
         for row in rows
     }
+    employees: list[EmployeeResponse] = []
 
     if include_employees:
         sort_col = (
             Employee.created_at if sort_by == "created_at" else Employee.full_name
         )
         emp_rows = await db.execute(
-            select(Employee)
-            .where(Employee.department_id.in_(dept_map.keys()))
-            .order_by(sort_col)
+            select(Employee).where(Employee.department_id == dept_id).order_by(sort_col)
         )
-        for emp in emp_rows.scalars():
-            dept_map[emp.department_id].employees.append(
-                EmployeeResponse.model_validate(emp)
-            )
+        employees = [EmployeeResponse.model_validate(emp) for emp in emp_rows.scalars()]
 
     for row in rows:
         if row.parent_id in dept_map and row.id != dept_id:
             dept_map[row.parent_id].children.append(dept_map[row.id])
 
-    return dept_map[dept_id]
+    root = dept_map[dept_id]
+    return DepartmentTreeResponse(
+        department=DepartmentBase(
+            id=root.id,
+            name=root.name,
+            parent_id=root.parent_id,
+            created_at=root.created_at,
+        ),
+        employees=employees,
+        children=root.children,
+    )
 
 
 async def update_department(
@@ -168,12 +176,10 @@ async def update_department(
         descendants = await _get_descendants_ids(db, dept_id)
         if new_parent_id in descendants:
             raise CycleDetectedError()
+        if "name" not in data.model_fields_set:
+            await _check_name_unique(db, dept.name, new_parent_id, exclude_id=dept_id)
         dept.parent_id = new_parent_id
         effective_parent_id = new_parent_id
-        if "name" not in data.model_fields_set:
-            await _check_name_unique(
-                db, dept.name, effective_parent_id, exclude_id=dept_id
-            )
 
     if "name" in data.model_fields_set and data.name is not None:
         await _check_name_unique(db, data.name, effective_parent_id, exclude_id=dept_id)

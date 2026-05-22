@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -21,8 +20,6 @@ from app.schemas import (
     DepartmentUpdate,
 )
 from app.services import departments as svc
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -65,7 +62,7 @@ async def create_department(
         "дочерних отделов. "
         "`depth` задаёт количество уровней вложенности дочерних отделов (1–5). "
         "Установите `include_employees=false`, "
-        "чтобы исключить списки сотрудников со всех уровней."
+        "чтобы исключить список сотрудников запрошенного отдела из ответа."
     ),
     responses={
         404: {"description": "Отдел не найден"},

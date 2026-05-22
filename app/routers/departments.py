@@ -10,6 +10,7 @@ from app.exceptions import (
     DepartmentNotFoundError,
     DuplicateDepartmentNameError,
     InvalidDeleteModeError,
+    InvalidReassignTargetError,
     ReassignTargetNotFoundError,
     SelfParentReferenceError,
 )
@@ -134,12 +135,17 @@ async def update_department(
         "и всех их сотрудников.\n"
         "- **reassign** — перемещает прямых сотрудников этого отдела в "
         "`reassign_to_department_id`, затем удаляет отдел "
-        "(дочерние отделы и их сотрудники всё равно каскадно удаляются).\n\n"
+        "(дочерние отделы и их сотрудники всё равно каскадно удаляются). "
+        "Цель переназначения не может быть самим удаляемым отделом "
+        "или его потомком.\n\n"
         "`reassign_to_department_id` обязателен при `mode=reassign`."
     ),
     responses={
         204: {"description": "Отдел удалён"},
-        400: {"description": "reassign_to_department_id отсутствует для mode=reassign"},
+        400: {
+            "description": "reassign_to_department_id отсутствует "
+            "или является удаляемым отделом / его потомком"
+        },
         404: {"description": "Отдел или цель переназначения не найдены"},
     },
 )
@@ -159,7 +165,7 @@ async def delete_department(
         return Response(status_code=204)
     except DepartmentNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except InvalidDeleteModeError as exc:
+    except (InvalidDeleteModeError, InvalidReassignTargetError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ReassignTargetNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

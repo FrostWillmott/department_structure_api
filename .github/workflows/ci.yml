@@ -7,12 +7,23 @@ on:
     branches: [master, main]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install uv
+      - run: uv sync --extra dev
+      - run: uv run ruff check .
+      - run: uv run mypy .
 
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
       - name: Run tests
         run: |
           docker compose --profile test up --build --abort-on-container-exit --exit-code-from test

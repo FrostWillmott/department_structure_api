@@ -2,6 +2,7 @@ import logging
 from typing import Literal
 
 from sqlalchemy import literal, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import (
@@ -9,6 +10,7 @@ from app.exceptions import (
     DepartmentNotFoundError,
     DuplicateDepartmentNameError,
     InvalidDeleteModeError,
+    InvalidReassignTargetError,
     ReassignTargetNotFoundError,
     SelfParentReferenceError,
 )
@@ -65,8 +67,12 @@ async def create_department(db: AsyncSession, data: DepartmentCreate) -> Departm
 
     dept = Department(name=data.name, parent_id=data.parent_id)
     db.add(dept)
-    await db.commit()
-    await db.refresh(dept)
+    try:
+        await db.commit()
+        await db.refresh(dept)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise DuplicateDepartmentNameError(data.name, data.parent_id) from exc
     logger.info(
         "Created department id=%d name=%r parent_id=%s",
         dept.id,
@@ -107,7 +113,7 @@ async def get_department_tree(
         .where(base.c.level < depth)
     )
     cte = base.union_all(recursive_part)
-    rows = (await db.execute(select(cte))).all()
+    rows = (await db.execute(select(cte).order_by(cte.c.name))).all()
     if not rows:
         raise DepartmentNotFoundError(dept_id)
 
@@ -173,8 +179,14 @@ async def update_department(
         await _check_name_unique(db, data.name, effective_parent_id, exclude_id=dept_id)
         dept.name = data.name
 
-    await db.commit()
-    await db.refresh(dept)
+    name_to_commit = dept.name
+    parent_to_commit = dept.parent_id
+    try:
+        await db.commit()
+        await db.refresh(dept)
+    except IntegrityError as exc:
+        await db.rollback()
+        raise DuplicateDepartmentNameError(name_to_commit, parent_to_commit) from exc
     logger.info("Updated department id=%d", dept_id)
     return dept
 
@@ -193,8 +205,13 @@ async def delete_department(
     if mode == "reassign":
         if reassign_to_id is None:
             raise InvalidDeleteModeError()
+        if reassign_to_id == dept_id:
+            raise InvalidReassignTargetError()
         if await db.get(Department, reassign_to_id) is None:
             raise ReassignTargetNotFoundError(reassign_to_id)
+        descendants = await _get_descendants_ids(db, dept_id)
+        if reassign_to_id in descendants:
+            raise InvalidReassignTargetError()
         await db.execute(
             update(Employee)
             .where(Employee.department_id == dept_id)

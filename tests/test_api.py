@@ -280,6 +280,35 @@ async def test_get_employees_sorted_by_name(client: AsyncClient) -> None:
     assert names == ["Anna Smith", "Zara Jones"]
 
 
+async def test_delete_reassign_to_self(client: AsyncClient) -> None:
+    dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
+    resp = await client.delete(
+        f"/departments/{dept['id']}?mode=reassign"
+        f"&reassign_to_department_id={dept['id']}"
+    )
+    assert resp.status_code == 400
+
+
+async def test_delete_reassign_to_descendant(client: AsyncClient) -> None:
+    parent = (await client.post("/departments/", json={"name": "Parent"})).json()
+    child = (
+        await client.post(
+            "/departments/", json={"name": "Child", "parent_id": parent["id"]}
+        )
+    ).json()
+    resp = await client.delete(
+        f"/departments/{parent['id']}?mode=reassign"
+        f"&reassign_to_department_id={child['id']}"
+    )
+    assert resp.status_code == 400
+
+
+async def test_patch_name_null_returns_422(client: AsyncClient) -> None:
+    dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
+    resp = await client.patch(f"/departments/{dept['id']}", json={"name": None})
+    assert resp.status_code == 422
+
+
 async def test_create_employee_with_hired_at(client: AsyncClient) -> None:
     dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
     resp = await client.post(

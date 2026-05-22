@@ -42,3 +42,12 @@ class ReassignTargetNotFoundError(Exception):
     def __init__(self, dept_id: int) -> None:
         self.dept_id = dept_id
         super().__init__(f"Reassign target department {dept_id} not found")
+
+
+class InvalidReassignTargetError(Exception):
+    """Raised when reassign target is the deleted department or its descendant."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Reassign target cannot be the deleted department or one of its descendants"
+        )

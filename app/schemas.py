@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _strip_string(value: object) -> object:
@@ -49,6 +49,15 @@ class DepartmentUpdate(BaseModel):
     def strip_name(cls, v: object) -> object:
         """Strip leading and trailing whitespace."""
         return _strip_string(v)
+
+    @model_validator(mode="after")
+    def name_not_null_if_provided(self) -> "DepartmentUpdate":
+        """Reject explicit name: null — omit the field to leave the name unchanged."""
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError(
+                "name cannot be null; omit the field to leave it unchanged"
+            )
+        return self
 
 
 class DepartmentBase(BaseModel):

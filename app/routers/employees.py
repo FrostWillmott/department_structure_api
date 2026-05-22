@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.exceptions import DepartmentNotFoundError
 from app.schemas import EmployeeCreate, EmployeeResponse
-from app.services import departments as svc
+from app.services import employees as svc
 
 router = APIRouter()
 

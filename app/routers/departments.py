@@ -28,16 +28,15 @@ router = APIRouter()
     "/",
     response_model=DepartmentBase,
     status_code=201,
-    summary="Создать отдел",
+    summary="Create department",
     description=(
-        "Создаёт новый отдел. "
-        "Название обрезается и должно быть уникальным в пределах одного родителя. "
-        "Передайте `parent_id: null` (или не указывайте), "
-        "чтобы создать корневой отдел."
+        "Creates a new department. "
+        "The name is stripped of whitespace and must be unique within the same parent. "
+        "Pass `parent_id: null` (or omit it) to create a root department."
     ),
     responses={
-        404: {"description": "Родительский отдел не найден"},
-        409: {"description": "Дублирующееся название в пределах одного родителя"},
+        404: {"description": "Parent department not found"},
+        409: {"description": "Duplicate name within the same parent"},
     },
 )
 async def create_department(
@@ -56,30 +55,30 @@ async def create_department(
 @router.get(
     "/{dept_id}",
     response_model=DepartmentTreeResponse,
-    summary="Получить данные отдела",
+    summary="Get department",
     description=(
-        "Возвращает отдел с его сотрудниками и вложенным поддеревом "
-        "дочерних отделов. "
-        "`depth` задаёт количество уровней вложенности дочерних отделов (1–5). "
-        "Установите `include_employees=false`, "
-        "чтобы исключить список сотрудников запрошенного отдела из ответа."
+        "Returns a department with its employees and a nested subtree "
+        "of child departments. "
+        "`depth` controls how many levels of children are returned (1–5). "
+        "Set `include_employees=false` to omit the employee list "
+        "of the requested department from the response."
     ),
     responses={
-        404: {"description": "Отдел не найден"},
+        404: {"description": "Department not found"},
     },
 )
 async def get_department(
     dept_id: int,
     db: Annotated[AsyncSession, Depends(get_db)],
     depth: Annotated[
-        int, Query(ge=1, le=5, description="Глубина вложенности дочерних отделов")
+        int, Query(ge=1, le=5, description="Number of child levels to include")
     ] = 1,
     include_employees: Annotated[
-        bool, Query(description="Включить сотрудников в ответ")
+        bool, Query(description="Include employees in the response")
     ] = True,
     sort_employees_by: Annotated[
         Literal["created_at", "full_name"],
-        Query(description="Поле для сортировки сотрудников"),
+        Query(description="Field to sort employees by"),
     ] = "created_at",
 ) -> DepartmentTreeResponse:
     try:
@@ -93,17 +92,17 @@ async def get_department(
 @router.patch(
     "/{dept_id}",
     response_model=DepartmentBase,
-    summary="Обновить отдел",
+    summary="Update department",
     description=(
-        "Частично обновляет отдел. Оба поля необязательны — "
-        "изменяются только переданные поля. "
-        "Чтобы переместить отдел в корень, явно передайте `parent_id: null`. "
-        "Перемещение отклоняется, если создаёт цикл в дереве отделов."
+        "Partially updates a department. Both fields are optional — "
+        "only provided fields are changed. "
+        "To move the department to the root, explicitly pass `parent_id: null`. "
+        "A move is rejected if it would create a cycle in the department tree."
     ),
     responses={
-        400: {"description": "Отдел не может быть своим собственным родителем"},
-        404: {"description": "Отдел или новый родитель не найден"},
-        409: {"description": "Конфликт имён или обнаружен цикл"},
+        400: {"description": "Department cannot be its own parent"},
+        404: {"description": "Department or new parent not found"},
+        409: {"description": "Name conflict or cycle detected"},
     },
 )
 async def update_department(
@@ -125,36 +124,34 @@ async def update_department(
 @router.delete(
     "/{dept_id}",
     status_code=204,
-    summary="Удалить отдел",
+    summary="Delete department",
     description=(
-        "Удаляет отдел в одном из двух режимов:\n\n"
-        "- **cascade** — удаляет отдел, все дочерние отделы рекурсивно "
-        "и всех их сотрудников.\n"
-        "- **reassign** — перемещает прямых сотрудников этого отдела в "
-        "`reassign_to_department_id`, затем удаляет отдел "
-        "(дочерние отделы и их сотрудники всё равно каскадно удаляются). "
-        "Цель переназначения не может быть самим удаляемым отделом "
-        "или его потомком.\n\n"
-        "`reassign_to_department_id` обязателен при `mode=reassign`."
+        "Deletes a department in one of two modes:\n\n"
+        "- **cascade** — deletes the department, all child departments recursively, "
+        "and all their employees.\n"
+        "- **reassign** — moves the direct employees of this department to "
+        "`reassign_to_department_id`, then deletes the department "
+        "(child departments and their employees are still deleted by cascade). "
+        "The reassign target cannot be the department itself"
+        " or one of its descendants.\n\n"
+        "`reassign_to_department_id` is required when `mode=reassign`."
     ),
     responses={
-        204: {"description": "Отдел удалён"},
+        204: {"description": "Department deleted"},
         400: {
-            "description": "reassign_to_department_id отсутствует "
-            "или является удаляемым отделом / его потомком"
+            "description": "reassign_to_department_id is missing "
+            "or is the department being deleted / one of its descendants"
         },
-        404: {"description": "Отдел или цель переназначения не найдены"},
+        404: {"description": "Department or reassign target not found"},
     },
 )
 async def delete_department(
     dept_id: int,
-    mode: Annotated[
-        Literal["cascade", "reassign"], Query(description="Режим удаления")
-    ],
+    mode: Annotated[Literal["cascade", "reassign"], Query(description="Deletion mode")],
     db: Annotated[AsyncSession, Depends(get_db)],
     reassign_to_department_id: Annotated[
         int | None,
-        Query(description="ID целевого отдела (обязателен при mode=reassign)"),
+        Query(description="Target department ID (required when mode=reassign)"),
     ] = None,
 ) -> Response:
     try:

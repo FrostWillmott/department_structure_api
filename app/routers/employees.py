@@ -15,14 +15,14 @@ router = APIRouter()
     "/{dept_id}/employees/",
     response_model=EmployeeResponse,
     status_code=201,
-    summary="Добавить сотрудника в отдел",
+    summary="Add employee to department",
     description=(
-        "Создаёт нового сотрудника в указанном отделе. "
-        "Поля `full_name` и `position` обрезаются и не должны быть пустыми. "
-        "`hired_at` необязателен."
+        "Creates a new employee in the specified department. "
+        "`full_name` and `position` are stripped of whitespace and must not be empty. "
+        "`hired_at` is optional."
     ),
     responses={
-        404: {"description": "Отдел не найден"},
+        404: {"description": "Department not found"},
     },
 )
 async def create_employee(

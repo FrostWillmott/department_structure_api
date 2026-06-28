@@ -224,7 +224,7 @@ async def delete_department(
             .values(department_id=reassign_to_id)
         )
 
-    # passive_deletes=True: не трогаем Employee через ORM, каскад на стороне БД.
+    # passive_deletes=True: skip Employee ORM deletes; the DB cascade handles them.
     await db.delete(dept)
     await db.commit()
     logger.info("Deleted department id=%d mode=%s", dept_id, mode)

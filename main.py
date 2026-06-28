@@ -12,12 +12,12 @@ logging.basicConfig(
 app = FastAPI(
     title="Department Structure API",
     description=(
-        "REST API для управления организационной структурой "
-        "отделов и сотрудников. "
-        "Отделы образуют древовидную иерархию через `parent_id`. "
-        "Поддерживает рекурсивное получение поддеревьев, "
-        "безопасные к циклам операции над деревом, "
-        "а также каскадный режим и режим переназначения при удалении."
+        "REST API for managing organizational structure "
+        "of departments and employees. "
+        "Departments form a tree hierarchy via `parent_id`. "
+        "Supports recursive subtree retrieval, "
+        "cycle-safe tree operations, "
+        "and both cascade and reassign modes for deletion."
     ),
     version="1.0.0",
 )

@@ -1,15 +1,32 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 
 class Department(Base):
-    """ORM model for a department node in the organisational tree."""
+    """ORM model for a department node in the organizational tree."""
 
     __tablename__ = "departments"
+    # Partial unique indexes: NULL != NULL in PostgreSQL, so a plain UNIQUE on
+    # (name, parent_id) would not deduplicate root departments.
+    __table_args__ = (
+        Index(
+            "uq_departments_name_parent",
+            "name",
+            "parent_id",
+            unique=True,
+            postgresql_where=text("parent_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_departments_name_root",
+            "name",
+            unique=True,
+            postgresql_where=text("parent_id IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -17,6 +34,7 @@ class Department(Base):
         Integer,
         ForeignKey("departments.id", ondelete="CASCADE"),
         nullable=True,
+        index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -47,6 +65,7 @@ class Employee(Base):
         Integer,
         ForeignKey("departments.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
     position: Mapped[str] = mapped_column(String(200), nullable=False)

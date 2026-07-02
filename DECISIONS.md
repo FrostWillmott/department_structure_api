@@ -258,13 +258,16 @@ So `await db.delete(dept)` in the service deletes one department row; the DB han
 
 ## 8. Name uniqueness
 
-**Decision:** department names are unique **within the same parent**, enforced in the service layer.
+**Decision:** department names are unique **within the same parent**, enforced at two levels.
 
-**Why not a DB UNIQUE constraint on `(name, parent_id)`:**
-- Root departments have `parent_id = NULL`. In PostgreSQL `NULL != NULL`, so a unique index on `(name, parent_id)` **would not prevent** two root departments with the same name.
-- A `UNIQUE` on `COALESCE(parent_id, 0)` would work, but the service-layer approach was chosen — it is simpler and produces a clear error message.
+**DB level — two partial unique indexes** (`alembic/versions/0001_initial.py`, mirrored in `Department.__table_args__`):
+- `uq_departments_name_parent` on `(name, parent_id)` where `parent_id IS NOT NULL`.
+- `uq_departments_name_root` on `name` where `parent_id IS NULL`.
+- Root departments have `parent_id = NULL`, and in PostgreSQL `NULL != NULL`, so a single unique index on `(name, parent_id)` would **not** prevent two root departments with the same name. Splitting into two partial indexes — one scoped to non-null parents, one scoped to root — solves the NULL problem while still living entirely in the DB.
 
-**Implementation:** `_check_name_unique` does a SELECT before insert/update; plus a `try/except IntegrityError` as a safety net against race conditions (concurrent requests).
+**Service level — `_check_name_unique`:** a SELECT before insert/update, purely to produce a **readable error message** (`DuplicateDepartmentNameError`) instead of a raw constraint violation.
+
+**`IntegrityError` fallback:** the pre-check and the actual insert/update are not atomic, so a concurrent request can still slip a duplicate past the SELECT. `try/except IntegrityError` around the commit catches this race and reports it the same way (409). See §14 for how this is distinguished from FK violations.
 
 ---
 

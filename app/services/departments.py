@@ -23,6 +23,7 @@ from app.schemas import (
     DepartmentUpdate,
     EmployeeResponse,
 )
+from app.services import _pg
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,13 @@ async def create_department(db: AsyncSession, data: DepartmentCreate) -> Departm
         await db.refresh(dept)
     except IntegrityError as exc:
         await db.rollback()
-        raise DuplicateDepartmentNameError(data.name, data.parent_id) from exc
+        if _pg.is_unique_violation(exc):
+            raise DuplicateDepartmentNameError(data.name, data.parent_id) from exc
+        if _pg.is_foreign_key_violation(exc):
+            # Only parent_id has an FK; None can never violate it.
+            assert data.parent_id is not None
+            raise DepartmentNotFoundError(data.parent_id) from exc
+        raise
     logger.info(
         "Created department id=%d name=%r parent_id=%s",
         dept.id,
@@ -192,7 +199,15 @@ async def update_department(
         await db.refresh(dept)
     except IntegrityError as exc:
         await db.rollback()
-        raise DuplicateDepartmentNameError(name_to_commit, parent_to_commit) from exc
+        if _pg.is_unique_violation(exc):
+            raise DuplicateDepartmentNameError(
+                name_to_commit, parent_to_commit
+            ) from exc
+        if _pg.is_foreign_key_violation(exc):
+            # Only parent_id has an FK; None can never violate it.
+            assert parent_to_commit is not None
+            raise DepartmentNotFoundError(parent_to_commit) from exc
+        raise
     logger.info("Updated department id=%d", dept_id)
     return dept
 

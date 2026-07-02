@@ -1,3 +1,5 @@
+import asyncio
+
 from httpx import AsyncClient
 
 
@@ -372,3 +374,23 @@ async def test_get_employees_default_sort_by_created_at(client: AsyncClient) -> 
     resp = await client.get(f"/departments/{dept['id']}")
     names = [e["full_name"] for e in resp.json()["employees"]]
     assert names == ["Charlie", "Bob", "Alice"]
+
+
+async def test_concurrent_opposing_reparent_cannot_create_cycle(
+    client: AsyncClient,
+) -> None:
+    dept_a = (await client.post("/departments/", json={"name": "A"})).json()
+    dept_b = (await client.post("/departments/", json={"name": "B"})).json()
+
+    resp_a, resp_b = await asyncio.gather(
+        client.patch(f"/departments/{dept_a['id']}", json={"parent_id": dept_b["id"]}),
+        client.patch(f"/departments/{dept_b['id']}", json={"parent_id": dept_a["id"]}),
+    )
+
+    assert sorted([resp_a.status_code, resp_b.status_code]) == [200, 409]
+
+    a_after = (await client.get(f"/departments/{dept_a['id']}")).json()["department"]
+    b_after = (await client.get(f"/departments/{dept_b['id']}")).json()["department"]
+    assert not (
+        a_after["parent_id"] == dept_b["id"] and b_after["parent_id"] == dept_a["id"]
+    )

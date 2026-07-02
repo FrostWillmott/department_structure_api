@@ -19,6 +19,7 @@
 11. [Configuration and environments](#11-configuration-and-environments)
 12. [SQLAlchemy 2.0: new syntax](#12-sqlalchemy-20-new-syntax)
 13. [Tests](#13-tests)
+14. [Concurrency](#14-concurrency)
 
 ---
 
@@ -376,3 +377,32 @@ employees: Mapped[list["Employee"]] = relationship(...)
 - `TEST_DATABASE_URL` is injected by compose; locally it falls back to `localhost`.
 
 **Why a real DB instead of mocks:** tests cover real FKs, `ON DELETE CASCADE`, `NULL` behaviour in uniqueness, and the recursive CTE — none of which can be reliably mocked.
+
+---
+
+## 14. Concurrency
+
+**Problem:** two concurrent `PATCH` requests reparenting "A under B" and "B under A" each run their BFS cycle check before the other commits — under READ COMMITTED, neither sees the other's uncommitted change. Both checks pass, both commit, and the tree ends up with a cycle. No DB constraint catches this (a cycle across FK-valid rows is not itself invalid at the row level).
+
+**What's protected by DB constraints (no locking needed):**
+- Name uniqueness per parent — the two partial unique indexes (`uq_departments_name_parent`, `uq_departments_name_root`, §8). A race here surfaces as `IntegrityError` → 409, already handled.
+- Referential integrity (`ON DELETE CASCADE`) — a parent deleted concurrently with a child insert/update surfaces as a FK violation → 404 (§3, `create_department`/`update_department`/`create_employee`).
+
+**What's protected by an advisory lock:** the tree-structure invariant itself (no cycles), because no constraint can express "no cycle in this self-referential FK". `update_department` (when `parent_id` is being changed) and `delete_department` (both modes) each start by acquiring a transaction-scoped PostgreSQL advisory lock on a single fixed key.
+
+`delete_department` takes the lock in **cascade mode too**, even though that path runs no BFS: without it, a concurrent `reassign`-mode delete elsewhere in the tree could still check "is the reassign target alive" before this transaction's cascade removes it, then commit into a target that no longer exists (an unhandled `IntegrityError` on commit, since `delete_department` has no `except IntegrityError` handling of its own). Serializing all delete/reparent transactions through the same lock means that check always runs against already-committed state.
+
+```python
+_TREE_MUTATION_LOCK_KEY = 815_001
+
+async def _lock_tree(db: AsyncSession) -> None:
+    await db.execute(select(func.pg_advisory_xact_lock(_TREE_MUTATION_LOCK_KEY)))
+```
+
+This serializes **all** tree-mutating transactions — a losing transaction blocks on `pg_advisory_xact_lock` until the winner commits or rolls back (`pg_advisory_xact_lock` auto-releases at transaction end, so no manual unlock is needed). Because PostgreSQL takes a fresh snapshot per statement under READ COMMITTED, the loser's subsequent `db.get`/BFS statements run *after* acquiring the lock and therefore see the winner's already-committed state — the BFS correctly finds the new cycle and raises `CycleDetectedError` (409), or a since-deleted department correctly raises `DepartmentNotFoundError` (404).
+
+**Why a single advisory lock instead of row-level locking (`SELECT ... FOR UPDATE`):** locking the specific rows involved in a reparent/delete would need a consistent lock order across the moved node, the new parent, and (for delete) the whole descendant subtree, to avoid deadlocks between two transactions locking the same rows in opposite order. A single fixed-key lock sidesteps ordering entirely and is trivially correct. The trade-off is full serialization of tree mutations — acceptable given how infrequent reparent/delete operations are relative to reads.
+
+**What's deliberately left unprotected:** creating a department under a parent that is concurrently being deleted. This is not a tree-structure race (no cycle can result) — it is the ordinary FK race already handled in §3, surfacing as 404 rather than silently succeeding or 500ing.
+
+**Known residual gap:** reparenting a node while it is concurrently being deleted is not fully closed by the lock. `update_department` fetches `dept` via `db.get` *before* acquiring the lock (the existence check happens first); if the row is deleted by a concurrent transaction between that fetch and the lock being granted, the subsequent `commit()` can raise `StaleDataError`, surfacing as an unhandled 500 rather than a clean 404. This is a narrow window (delete + reparent of the *same* department, not covered by the current test suite) and was judged not worth a re-fetch after the lock for this scale of project — noted here as a documented trade-off rather than silently left unhandled.

@@ -1,7 +1,7 @@
 import logging
 from typing import Literal
 
-from sqlalchemy import literal, select, update
+from sqlalchemy import func, literal, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,15 @@ from app.schemas import (
 from app.services import _pg
 
 logger = logging.getLogger(__name__)
+
+# Arbitrary fixed key for pg_advisory_xact_lock, scoped to this app.
+# Serializes tree-structure mutations (reparent/delete) so that concurrent
+# existence/BFS checks always see each other's committed changes; see DECISIONS §14.
+_TREE_MUTATION_LOCK_KEY = 815_001
+
+
+async def _lock_tree(db: AsyncSession) -> None:
+    await db.execute(select(func.pg_advisory_xact_lock(_TREE_MUTATION_LOCK_KEY)))
 
 
 async def _get_descendants_ids(db: AsyncSession, dept_id: int) -> set[int]:
@@ -174,6 +183,7 @@ async def update_department(
     effective_parent_id = dept.parent_id
 
     if "parent_id" in data.model_fields_set:
+        await _lock_tree(db)
         new_parent_id = data.parent_id
         if new_parent_id == dept_id:
             raise SelfParentReferenceError()
@@ -219,6 +229,7 @@ async def delete_department(
     reassign_to_id: int | None,
 ) -> None:
     """Delete a department in cascade or reassign mode."""
+    await _lock_tree(db)
     dept = await db.get(Department, dept_id)
     if dept is None:
         raise DepartmentNotFoundError(dept_id)

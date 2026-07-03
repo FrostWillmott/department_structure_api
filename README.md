@@ -63,6 +63,8 @@ The coverage report is printed in the container logs.
 | `TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test` | DB URL for running tests locally |
 | `COMPOSE_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@db:5432/department_api` | DB URL for the `app` service inside `docker compose` |
 | `COMPOSE_TEST_DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@db_test:5432/department_api_test` | DB URL for the `test` service inside `docker compose --profile test` |
+| `DB_POOL_SIZE` | `5` | SQLAlchemy async engine connection pool size |
+| `DB_MAX_OVERFLOW` | `10` | Extra connections allowed above `DB_POOL_SIZE` under load |
 
 ## API overview
 
@@ -73,6 +75,7 @@ The coverage report is printed in the container logs.
 | `PATCH` | `/departments/{id}` | Rename or move a department |
 | `DELETE` | `/departments/{id}` | Delete (cascade or reassign mode) |
 | `POST` | `/departments/{id}/employees/` | Add an employee to a department |
+| `GET` | `/health` | Health check — `{"status": "ok"}`, or 503 if the DB is unreachable |
 
 ### Key behaviours
 

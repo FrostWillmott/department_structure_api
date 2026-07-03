@@ -451,3 +451,9 @@ async def test_concurrent_opposing_reparent_cannot_create_cycle(
     assert not (
         a_after["parent_id"] == dept_b["id"] and b_after["parent_id"] == dept_a["id"]
     )
+
+
+async def test_health(client: AsyncClient) -> None:
+    resp = await client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}

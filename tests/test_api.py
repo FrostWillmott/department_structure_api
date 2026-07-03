@@ -376,6 +376,23 @@ async def test_get_employees_default_sort_by_created_at(client: AsyncClient) -> 
     assert names == ["Charlie", "Bob", "Alice"]
 
 
+async def test_get_employees_paginated(client: AsyncClient) -> None:
+    dept = (await client.post("/departments/", json={"name": "Engineering"})).json()
+    for name in ("Charlie", "Bob", "Alice"):
+        await client.post(
+            f"/departments/{dept['id']}/employees/",
+            json={"full_name": name, "position": "Dev"},
+        )
+
+    resp = await client.get(f"/departments/{dept['id']}?employees_limit=2")
+    names = [e["full_name"] for e in resp.json()["employees"]]
+    assert names == ["Charlie", "Bob"]
+
+    resp = await client.get(f"/departments/{dept['id']}?employees_offset=2")
+    names = [e["full_name"] for e in resp.json()["employees"]]
+    assert names == ["Alice"]
+
+
 async def test_get_department_depth_truncates_grandchildren(
     client: AsyncClient,
 ) -> None:

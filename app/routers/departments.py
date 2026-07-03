@@ -66,9 +66,21 @@ async def get_department(
         Literal["created_at", "full_name"],
         Query(description="Field to sort employees by"),
     ] = "created_at",
+    employees_limit: Annotated[
+        int, Query(ge=1, le=500, description="Max number of employees to return")
+    ] = 100,
+    employees_offset: Annotated[
+        int, Query(ge=0, description="Number of employees to skip")
+    ] = 0,
 ) -> DepartmentTreeResponse:
     return await svc.get_department_tree(
-        db, dept_id, depth, include_employees, sort_employees_by
+        db,
+        dept_id,
+        depth,
+        include_employees,
+        sort_employees_by,
+        employees_limit,
+        employees_offset,
     )
 
 

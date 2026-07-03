@@ -78,9 +78,9 @@ The coverage report is printed in the container logs.
 
 - Department names are **unique within the same parent**.
 - A move is rejected if it would create a **cycle** in the tree.
-- `GET /departments/{id}` accepts `depth` (1–5), `include_employees`, and `sort_employees_by`, and returns:
+- `GET /departments/{id}` accepts `depth` (1–5), `include_employees`, `sort_employees_by`, `employees_limit` (1–500, default 100), and `employees_offset` (default 0), and returns:
   - `department` — data for the requested department
-  - `employees` — employees of the requested department (optional, controlled by `include_employees`)
+  - `employees` — employees of the requested department, paginated by `employees_limit`/`employees_offset` (optional, controlled by `include_employees`)
   - `children` — recursive subtree of child departments
 
 Example `GET /departments/{id}` response:

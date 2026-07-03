@@ -106,6 +106,8 @@ async def get_department_tree(
     depth: int,
     include_employees: bool,
     sort_by: Literal["created_at", "full_name"],
+    employees_limit: int,
+    employees_offset: int,
 ) -> DepartmentTreeResponse:
     """Return department details, employees and nested child departments."""
     base = (
@@ -151,7 +153,11 @@ async def get_department_tree(
             Employee.created_at if sort_by == "created_at" else Employee.full_name
         )
         emp_rows = await db.execute(
-            select(Employee).where(Employee.department_id == dept_id).order_by(sort_col)
+            select(Employee)
+            .where(Employee.department_id == dept_id)
+            .order_by(sort_col)
+            .limit(employees_limit)
+            .offset(employees_offset)
         )
         employees = [EmployeeResponse.model_validate(emp) for emp in emp_rows.scalars()]
 

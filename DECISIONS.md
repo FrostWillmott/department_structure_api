@@ -121,7 +121,7 @@ for row in rows:
         dept_map[row.parent_id].children.append(dept_map[row.id])
 ```
 
-**Employees** — fetched in a separate query, only for the requested department (not the whole subtree). Sorted by `created_at` or `full_name`. When `include_employees=false` the query is skipped.
+**Employees** — fetched in a separate query, only for the requested department (not the whole subtree). Sorted by `created_at` or `full_name`, then paginated with `.limit(employees_limit).offset(employees_offset)` (limit 1–500, default 100; offset defaults to 0) — pagination is applied after sorting so the page boundary is deterministic. When `include_employees=false` the query is skipped.
 
 ---
 

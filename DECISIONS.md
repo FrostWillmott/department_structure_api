@@ -371,8 +371,10 @@ employees: Mapped[list["Employee"]] = relationship(...)
 **Decision:** integration tests against a real PostgreSQL instance in Docker.
 
 - Dedicated DB `department_api_test`, service `db_test` (Docker Compose profile `test`).
-- `conftest.py`: `alembic upgrade head` before tests, `downgrade base` after — this also validates the migrations themselves.
-- `dependency_overrides[get_db]` — replaces the session with a test one (test engine/sessionmaker).
+- `conftest.py`: `migrated_database` and `db_engine` are **session-scoped** — `alembic upgrade head` runs once before the whole test session, `downgrade base` once after (this still validates the migrations, including downgrade, just not on every single test).
+- A function-scoped, autouse `_truncate_tables` fixture runs `TRUNCATE TABLE employees, departments RESTART IDENTITY CASCADE` before each test, giving every test the same clean-slate guarantee the old per-test migration cycle gave, at a fraction of the cost (no subprocess, no DDL).
+- `pyproject.toml`: `asyncio_default_fixture_loop_scope`/`asyncio_default_test_loop_scope = "session"` — required so the session-scoped async engine binds to the same event loop across all tests (a session-scoped asyncpg pool created under a function-scoped loop breaks with "attached to a different loop" on the second test).
+- `dependency_overrides[get_db]` — replaces the session with a test one (test engine/sessionmaker); a fresh session/connection is created **per HTTP request**, which is what makes the concurrency test in §14 meaningful (two gathered requests get two separate DB connections).
 - `httpx.AsyncClient` + `ASGITransport(app=app)` — requests to the app without starting a real HTTP server.
 - `TEST_DATABASE_URL` is injected by compose; locally it falls back to `localhost`.
 

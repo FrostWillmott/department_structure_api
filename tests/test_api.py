@@ -376,6 +376,46 @@ async def test_get_employees_default_sort_by_created_at(client: AsyncClient) -> 
     assert names == ["Charlie", "Bob", "Alice"]
 
 
+async def test_get_department_depth_truncates_grandchildren(
+    client: AsyncClient,
+) -> None:
+    root = (await client.post("/departments/", json={"name": "Root"})).json()
+    child = (
+        await client.post(
+            "/departments/", json={"name": "Child", "parent_id": root["id"]}
+        )
+    ).json()
+    await client.post(
+        "/departments/", json={"name": "Grandchild", "parent_id": child["id"]}
+    )
+
+    resp = await client.get(f"/departments/{root['id']}?depth=1")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["children"]) == 1
+    assert data["children"][0]["id"] == child["id"]
+    assert data["children"][0]["children"] == []
+
+
+async def test_patch_rename_and_reparent_simultaneously(client: AsyncClient) -> None:
+    parent_a = (await client.post("/departments/", json={"name": "Division A"})).json()
+    parent_b = (await client.post("/departments/", json={"name": "Division B"})).json()
+    dept = (
+        await client.post(
+            "/departments/", json={"name": "Backend", "parent_id": parent_a["id"]}
+        )
+    ).json()
+
+    resp = await client.patch(
+        f"/departments/{dept['id']}",
+        json={"name": "Platform", "parent_id": parent_b["id"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "Platform"
+    assert data["parent_id"] == parent_b["id"]
+
+
 async def test_concurrent_opposing_reparent_cannot_create_cycle(
     client: AsyncClient,
 ) -> None:

@@ -1,11 +1,12 @@
 import os
 import subprocess
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -34,18 +35,27 @@ def _run_alembic(command: str, revision: str) -> None:
     )
 
 
-@pytest.fixture
-def migrated_database() -> AsyncIterator[None]:
+@pytest.fixture(scope="session")
+def migrated_database() -> Iterator[None]:
     _run_alembic("upgrade", "head")
     yield
     _run_alembic("downgrade", "base")
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="session")
 async def db_engine(migrated_database: None) -> AsyncIterator[AsyncEngine]:
     engine = create_async_engine(TEST_DATABASE_URL)
     yield engine
     await engine.dispose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _truncate_tables(db_engine: AsyncEngine) -> None:
+    """Isolate each test: migrations run once per session, not per test."""
+    async with db_engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE TABLE employees, departments RESTART IDENTITY CASCADE")
+        )
 
 
 @pytest_asyncio.fixture

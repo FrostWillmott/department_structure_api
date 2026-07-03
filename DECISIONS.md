@@ -28,9 +28,9 @@
 **Decision:** split into `routers/` (HTTP) → `services/` (business logic) → `database.py` (DB access).
 
 **Why:**
-- Routers handle only HTTP: parse the request, call the service, convert domain exceptions to `HTTPException`.
+- Routers handle only HTTP: parse the request, call the service, return the result.
 - Services contain all business logic (validation, cycles, cascades) and **have no knowledge of HTTP** — they can be tested and reused outside a web context.
-- Domain exceptions (`app/exceptions.py`) are the contract between layers: the service raises `DepartmentNotFoundError`, the router decides that means 404.
+- Domain exceptions (`app/exceptions.py`) are the contract between layers: the service raises `DepartmentNotFoundError`, and a single registry in `app/error_handlers.py` maps each exception type to its HTTP status, instead of every router endpoint repeating its own try/except.
 
 **Alternatives:**
 - A repository layer between the service and SQLAlchemy. **Deliberately omitted:** at this scale it would add abstraction with no practical benefit. Services call SQLAlchemy directly.

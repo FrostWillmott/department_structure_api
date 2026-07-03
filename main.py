@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI
 
+from app.error_handlers import register_exception_handlers
 from app.routers import departments, employees
 
 logging.basicConfig(
@@ -21,6 +22,8 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+
+register_exception_handlers(app)
 
 app.include_router(departments.router, prefix="/departments", tags=["Departments"])
 app.include_router(employees.router, prefix="/departments", tags=["Employees"])

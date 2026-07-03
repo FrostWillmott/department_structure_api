@@ -1,18 +1,9 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.exceptions import (
-    CycleDetectedError,
-    DepartmentNotFoundError,
-    DuplicateDepartmentNameError,
-    InvalidDeleteModeError,
-    InvalidReassignTargetError,
-    ReassignTargetNotFoundError,
-    SelfParentReferenceError,
-)
 from app.schemas import (
     DepartmentBase,
     DepartmentCreate,
@@ -43,13 +34,8 @@ async def create_department(
     data: DepartmentCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DepartmentBase:
-    try:
-        dept = await svc.create_department(db, data)
-        return DepartmentBase.model_validate(dept)
-    except DepartmentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except DuplicateDepartmentNameError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    dept = await svc.create_department(db, data)
+    return DepartmentBase.model_validate(dept)
 
 
 @router.get(
@@ -81,12 +67,9 @@ async def get_department(
         Query(description="Field to sort employees by"),
     ] = "created_at",
 ) -> DepartmentTreeResponse:
-    try:
-        return await svc.get_department_tree(
-            db, dept_id, depth, include_employees, sort_employees_by
-        )
-    except DepartmentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await svc.get_department_tree(
+        db, dept_id, depth, include_employees, sort_employees_by
+    )
 
 
 @router.patch(
@@ -110,15 +93,8 @@ async def update_department(
     data: DepartmentUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DepartmentBase:
-    try:
-        dept = await svc.update_department(db, dept_id, data)
-        return DepartmentBase.model_validate(dept)
-    except DepartmentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except SelfParentReferenceError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except (CycleDetectedError, DuplicateDepartmentNameError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    dept = await svc.update_department(db, dept_id, data)
+    return DepartmentBase.model_validate(dept)
 
 
 @router.delete(
@@ -154,12 +130,5 @@ async def delete_department(
         Query(description="Target department ID (required when mode=reassign)"),
     ] = None,
 ) -> Response:
-    try:
-        await svc.delete_department(db, dept_id, mode, reassign_to_department_id)
-        return Response(status_code=204)
-    except DepartmentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except (InvalidDeleteModeError, InvalidReassignTargetError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except ReassignTargetNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await svc.delete_department(db, dept_id, mode, reassign_to_department_id)
+    return Response(status_code=204)

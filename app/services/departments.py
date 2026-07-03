@@ -4,6 +4,7 @@ from typing import Literal
 from sqlalchemy import func, literal, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.exceptions import (
     CycleDetectedError,
@@ -182,6 +183,11 @@ async def update_department(
     db: AsyncSession, dept_id: int, data: DepartmentUpdate
 ) -> Department:
     """Rename or reparent a department, rejecting self-references and cycles."""
+    # Lock before the existence check so a concurrent delete of this department
+    # is seen here as a clean 404 instead of a StaleDataError at commit.
+    if "parent_id" in data.model_fields_set:
+        await _lock_tree(db)
+
     dept = await db.get(Department, dept_id)
     if dept is None:
         raise DepartmentNotFoundError(dept_id)
@@ -189,7 +195,6 @@ async def update_department(
     effective_parent_id = dept.parent_id
 
     if "parent_id" in data.model_fields_set:
-        await _lock_tree(db)
         new_parent_id = data.parent_id
         if new_parent_id == dept_id:
             raise SelfParentReferenceError()
@@ -211,8 +216,10 @@ async def update_department(
     name_to_commit = dept.name
     parent_to_commit = dept.parent_id
     try:
+        # No refresh: UPDATE produces no server-generated values, and a
+        # post-commit refresh runs outside the advisory lock, so it could
+        # 500 on a row deleted by a concurrent transaction.
         await db.commit()
-        await db.refresh(dept)
     except IntegrityError as exc:
         await db.rollback()
         if _pg.is_unique_violation(exc):
@@ -224,6 +231,11 @@ async def update_department(
             assert parent_to_commit is not None
             raise DepartmentNotFoundError(parent_to_commit) from exc
         raise
+    except StaleDataError as exc:
+        # Rename-only requests take no tree lock; the department can be
+        # deleted concurrently, making the UPDATE match zero rows.
+        await db.rollback()
+        raise DepartmentNotFoundError(dept_id) from exc
     logger.info("Updated department id=%d", dept_id)
     return dept
 

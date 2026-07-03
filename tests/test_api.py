@@ -453,6 +453,21 @@ async def test_concurrent_opposing_reparent_cannot_create_cycle(
     )
 
 
+async def test_concurrent_reparent_and_delete_no_server_error(
+    client: AsyncClient,
+) -> None:
+    parent = (await client.post("/departments/", json={"name": "Parent"})).json()
+    dept = (await client.post("/departments/", json={"name": "Dept"})).json()
+
+    resp_patch, resp_delete = await asyncio.gather(
+        client.patch(f"/departments/{dept['id']}", json={"parent_id": parent["id"]}),
+        client.delete(f"/departments/{dept['id']}?mode=cascade"),
+    )
+
+    assert resp_delete.status_code == 204
+    assert resp_patch.status_code in (200, 404)
+
+
 async def test_health(client: AsyncClient) -> None:
     resp = await client.get("/health")
     assert resp.status_code == 200

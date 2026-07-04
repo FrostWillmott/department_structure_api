@@ -23,7 +23,12 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
 
 
 async def _handle_domain_exception(request: Request, exc: Exception) -> JSONResponse:
-    status_code = _STATUS_BY_EXCEPTION[type(exc)]
+    for cls in type(exc).__mro__:
+        if cls in _STATUS_BY_EXCEPTION:
+            status_code = _STATUS_BY_EXCEPTION[cls]
+            break
+    else:
+        status_code = 500
     return JSONResponse({"detail": str(exc)}, status_code=status_code)
 
 

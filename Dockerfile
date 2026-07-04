@@ -31,4 +31,4 @@ COPY . .
 
 ENV COVERAGE_CORE=sysmon
 
-CMD ["uv", "run", "pytest", "-v"]
+CMD ["uv", "run", "pytest", "-v", "--cov=app", "--cov-report=term-missing"]

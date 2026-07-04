@@ -1,5 +1,5 @@
 import logging
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import func, literal, select, update
 from sqlalchemy.exc import IntegrityError
@@ -89,8 +89,7 @@ async def create_department(db: AsyncSession, data: DepartmentCreate) -> Departm
             raise DuplicateDepartmentNameError(data.name, data.parent_id) from exc
         if _pg.is_foreign_key_violation(exc):
             # Only parent_id has an FK; None can never violate it.
-            assert data.parent_id is not None
-            raise DepartmentNotFoundError(data.parent_id) from exc
+            raise DepartmentNotFoundError(cast(int, data.parent_id)) from exc
         raise
     logger.info(
         "Created department id=%d name=%r parent_id=%s",
@@ -228,8 +227,7 @@ async def update_department(
             ) from exc
         if _pg.is_foreign_key_violation(exc):
             # Only parent_id has an FK; None can never violate it.
-            assert parent_to_commit is not None
-            raise DepartmentNotFoundError(parent_to_commit) from exc
+            raise DepartmentNotFoundError(cast(int, parent_to_commit)) from exc
         raise
     except StaleDataError as exc:
         # Rename-only requests take no tree lock; the department can be

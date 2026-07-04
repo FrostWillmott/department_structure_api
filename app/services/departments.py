@@ -156,7 +156,7 @@ async def get_department_tree(
         emp_rows = await db.execute(
             select(Employee)
             .where(Employee.department_id == dept_id)
-            .order_by(sort_col)
+            .order_by(sort_col, Employee.id)
             .limit(employees_limit)
             .offset(employees_offset)
         )

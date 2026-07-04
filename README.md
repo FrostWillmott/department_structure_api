@@ -15,7 +15,7 @@ REST API for managing organizational structure: hierarchical departments and emp
 ## Quick start
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 The app will be available at [http://localhost:8000](http://localhost:8000).  

@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-department_api}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Exposing 5432 is convenient for local development but publishes the
+    # database with default credentials on the host network — remove in prod.
     ports:
       - "5432:5432"
     healthcheck:

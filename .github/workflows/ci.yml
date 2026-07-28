@@ -44,6 +44,7 @@ jobs:
         run: uv run pytest -v --cov=app --cov-report=term --cov-report=xml
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test
+          COVERAGE_CORE: sysmon
       - name: Coverage badge and PR comment
         uses: py-cov-action/python-coverage-comment-action@v3
         with:

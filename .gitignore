@@ -78,6 +78,5 @@ coverage.xml
 .hypothesis/
 
 # AI tools
-CLAUDE.md
 .claude/
 .cursor/

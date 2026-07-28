@@ -6,8 +6,8 @@
 |----------------------------- | -------: | -------: | ------: | --------: |
 | app/\_\_init\_\_.py          |        0 |        0 |    100% |           |
 | app/config.py                |        7 |        0 |    100% |           |
-| app/database.py              |       10 |        2 |     80% |     25-26 |
-| app/error\_handlers.py       |       14 |        1 |     93% |        31 |
+| app/database.py              |       10 |        0 |    100% |           |
+| app/error\_handlers.py       |       14 |        0 |    100% |           |
 | app/exceptions.py            |       25 |        0 |    100% |           |
 | app/models.py                |       22 |        0 |    100% |           |
 | app/routers/\_\_init\_\_.py  |        0 |        0 |    100% |           |
@@ -15,10 +15,10 @@
 | app/routers/employees.py     |       11 |        1 |     91% |        33 |
 | app/schemas.py               |       53 |        0 |    100% |           |
 | app/services/\_\_init\_\_.py |        0 |        0 |    100% |           |
-| app/services/\_pg.py         |       13 |        1 |     92% |        17 |
-| app/services/departments.py  |      128 |       89 |     30% |48-53, 69-70, 77, 81-100, 137-169, 191-238, 249-272 |
-| app/services/employees.py    |       23 |       13 |     43% |     19-39 |
-| **TOTAL**                    |  **328** |  **110** | **66%** |           |
+| app/services/\_pg.py         |       13 |        0 |    100% |           |
+| app/services/departments.py  |      128 |       44 |     66% |50-52, 70, 77, 85, 94-100, 137-169, 192, 199, 202, 205, 237-238, 249-272 |
+| app/services/employees.py    |       23 |        4 |     83% |19, 30, 38-39 |
+| **TOTAL**                    |  **328** |   **52** | **84%** |           |
 
 
 ## Setup coverage badge

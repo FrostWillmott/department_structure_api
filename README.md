@@ -1,5 +1,7 @@
 # Department Structure API
 
+![Coverage](https://raw.githubusercontent.com/FrostWillmott/department_structure_api/python-coverage-comment-action-data/badge.svg)
+
 REST API for managing organizational structure: hierarchical departments and employees.
 
 ## Technologies

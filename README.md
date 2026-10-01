@@ -1,8 +1,11 @@
 # Department Structure API
 
+[![CI](https://github.com/FrostWillmott/department_structure_api/actions/workflows/ci.yml/badge.svg)](https://github.com/FrostWillmott/department_structure_api/actions/workflows/ci.yml)
 ![Coverage](https://raw.githubusercontent.com/FrostWillmott/department_structure_api/python-coverage-comment-action-data/badge.svg)
 
 REST API for managing organizational structure: hierarchical departments and employees.
+
+Design decisions and trade-offs are documented in [DECISIONS.md](DECISIONS.md).
 
 ## Technologies
 
@@ -121,3 +124,7 @@ Example `GET /departments/{id}` response:
 ```
 - `DELETE` with `mode=cascade` deletes the department, all child departments, and all their employees.
 - `DELETE` with `mode=reassign` moves the direct employees to `reassign_to_department_id` before deleting.
+
+## License
+
+[MIT](LICENSE)

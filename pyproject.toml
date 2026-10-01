@@ -3,6 +3,7 @@ name = "department-structure-api"
 version = "0.1.0"
 description = "REST API for managing organizational department structure"
 requires-python = ">=3.12"
+license = "MIT"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",

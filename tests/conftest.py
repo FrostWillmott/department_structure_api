@@ -1,10 +1,11 @@
 import os
-import subprocess
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.config import settings
 from app.database import get_db
 from main import app
 
@@ -23,16 +25,18 @@ TEST_DATABASE_URL = os.getenv(
 )
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# Alembic's env.py reads settings.database_url, so point the shared settings at
+# the test database before running migrations in-process.
+settings.database_url = TEST_DATABASE_URL
 
-def _run_alembic(command: str, revision: str) -> None:
-    env = os.environ.copy()
-    env["DATABASE_URL"] = TEST_DATABASE_URL
-    subprocess.run(
-        ["uv", "run", "alembic", command, revision],
-        cwd=PROJECT_ROOT,
-        env=env,
-        check=True,
-    )
+
+def _run_alembic(action: str, revision: str) -> None:
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
+    if action == "upgrade":
+        command.upgrade(cfg, revision)
+    else:
+        command.downgrade(cfg, revision)
 
 
 @pytest.fixture(scope="session")

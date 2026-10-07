@@ -37,6 +37,11 @@ ignore = ["SIM102", "D100", "D104", "D105", "D107"]
 "app/routers/*" = ["D"]
 "alembic/*" = ["D"]
 
+[tool.ruff.lint.isort]
+# `alembic` is a third-party dependency; the `alembic/` migrations directory
+# must not be misclassified as a first-party package.
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 

@@ -94,7 +94,3 @@ Tests run against a dedicated PostgreSQL instance (`db_test`) via Docker Compose
 - No repository layer — services call SQLAlchemy directly
 - No comments unless the why is non-obvious
 - All string inputs stripped of whitespace via Pydantic `field_validator(..., mode='before')`
-
-## Git
-
-- Do not add AI tool references, co-author lines, or "generated with" notes to commit messages.

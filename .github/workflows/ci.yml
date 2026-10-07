@@ -41,7 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --extra dev
       - name: Run tests
-        run: uv run pytest -v --cov=app --cov-report=term --cov-report=xml
+        run: uv run pytest -v --cov=app --cov-report=term --cov-report=xml --cov-fail-under=85
         env:
           TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/department_api_test
           COVERAGE_CORE: sysmon

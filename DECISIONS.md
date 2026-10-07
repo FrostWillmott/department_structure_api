@@ -108,9 +108,7 @@ Step by step (PostgreSQL drives the loop):
 **Important details:**
 - `level` is a computed column (`literal(0).label("level")` in the anchor, `base.c.level + 1` in the recursion). It does not exist in the table — it is calculated because depth is relative to whichever root we start from.
 - `depth` (validated 1–5 in the router) limits traversal: `WHERE level < depth`.
-- `.c` (`base.c.id`, `base.c.level`) — access to CTE columns. This is SQLAlchemy API (`c` = columns), not FastAPI.
 - In Python there is **one** `await db.execute(...)`; the loop runs inside PostgreSQL.
-- Lines 95–117 of the service only **build** the SQL; the query is sent to the DB at `db.execute` (line 118).
 
 **After the CTE** — tree assembly in Python:
 
@@ -203,28 +201,8 @@ if "parent_id" in data.model_fields_set:
 
 **Decision:** two modes via the `mode` query parameter.
 
-### cascade
-
-```python
-await db.delete(dept)   # DB cascades deletion to children and employees
-await db.commit()
-```
-
-Deletes the department, the entire subtree, and all their employees (via `ON DELETE CASCADE`).
-
-### reassign
-
-```python
-await db.execute(
-    update(Employee)
-    .where(Employee.department_id == dept_id)
-    .values(department_id=reassign_to_id)
-)
-await db.delete(dept)
-await db.commit()
-```
-
-Moves **only the direct** employees of the deleted department to the target, then deletes the department. Child departments and their employees are still deleted by cascade.
+- **cascade** — delete the department; `ON DELETE CASCADE` removes the subtree and its employees.
+- **reassign** — move the department's **direct** employees to a target, then delete the department; child departments still cascade.
 
 | | cascade | reassign |
 |---|---|---|
@@ -232,13 +210,7 @@ Moves **only the direct** employees of the deleted department to the target, the
 | child departments | deleted | deleted |
 | employees of child departments | deleted | deleted |
 
-**Important:** reassign does not "save the whole subtree" — it only preserves the people from the deleted department itself. This is an intentional contract: child branches are considered part of the deleted structure.
-
-**Guards for reassign:**
-- no `reassign_to_id` → `InvalidDeleteModeError` (400);
-- target == the department itself → `InvalidReassignTargetError` (400);
-- target does not exist → `ReassignTargetNotFoundError` (404);
-- target is a descendant of the deleted department (BFS) → `InvalidReassignTargetError` (400). Otherwise employees would be moved to a department that is immediately deleted by cascade.
+**Trade-off:** `reassign` preserves only the people of the deleted department itself — child branches are part of the deleted structure. Guards: no target → 400; target == self → 400; target missing → 404; target is a descendant → 400 (else employees would be moved into a department deleted moments later by cascade).
 
 ---
 
@@ -261,14 +233,9 @@ So `await db.delete(dept)` in the service deletes one department row; the DB han
 
 **Decision:** department names are unique **within the same parent**, enforced at two levels.
 
-**DB level — two partial unique indexes** (`alembic/versions/0001_initial.py`, mirrored in `Department.__table_args__`):
-- `uq_departments_name_parent` on `(name, parent_id)` where `parent_id IS NOT NULL`.
-- `uq_departments_name_root` on `name` where `parent_id IS NULL`.
-- Root departments have `parent_id = NULL`, and in PostgreSQL `NULL != NULL`, so a single unique index on `(name, parent_id)` would **not** prevent two root departments with the same name. Splitting into two partial indexes — one scoped to non-null parents, one scoped to root — solves the NULL problem while still living entirely in the DB.
-
-**Service level — `_check_name_unique`:** a SELECT before insert/update, purely to produce a **readable error message** (`DuplicateDepartmentNameError`) instead of a raw constraint violation.
-
-**`IntegrityError` fallback:** the pre-check and the actual insert/update are not atomic, so a concurrent request can still slip a duplicate past the SELECT. `try/except IntegrityError` around the commit catches this race and reports it the same way (409). See §14 for how this is distinguished from FK violations.
+- **DB (source of truth):** two partial unique indexes — `uq_departments_name_parent` on `(name, parent_id)` where `parent_id IS NOT NULL`, and `uq_departments_name_root` on `name` where `parent_id IS NULL`. A single `(name, parent_id)` index wouldn't stop duplicate roots, because `NULL != NULL` in PostgreSQL.
+- **Service:** `_check_name_unique` does a SELECT before the write, purely to return a readable `DuplicateDepartmentNameError` (409) instead of a raw constraint violation.
+- **`IntegrityError` fallback:** the check and the write aren't atomic, so a concurrent duplicate can slip past the SELECT; `except IntegrityError` around the commit catches the race. §14 covers how this is told apart from FK violations.
 
 ---
 
@@ -384,15 +351,13 @@ employees: Mapped[list["Employee"]] = relationship(...)
 
 ## 14. Concurrency
 
-**Problem:** two concurrent `PATCH` requests reparenting "A under B" and "B under A" each run their BFS cycle check before the other commits — under READ COMMITTED, neither sees the other's uncommitted change. Both checks pass, both commit, and the tree ends up with a cycle. No DB constraint catches this (a cycle across FK-valid rows is not itself invalid at the row level).
+**Problem:** two concurrent `PATCH` requests reparenting "A under B" and "B under A" each run their BFS cycle check before the other commits — under READ COMMITTED, neither sees the other's uncommitted change, so both checks pass and both commit, leaving a cycle that no DB constraint catches.
 
-**What's protected by DB constraints (no locking needed):**
-- Name uniqueness per parent — the two partial unique indexes (`uq_departments_name_parent`, `uq_departments_name_root`, §8). A race here surfaces as `IntegrityError` → 409, already handled.
-- Referential integrity (`ON DELETE CASCADE`) — a parent deleted concurrently with a child insert/update surfaces as a FK violation → 404 (§3, `create_department`/`update_department`/`create_employee`).
+**Protected by DB constraints (no locking):**
+- Name uniqueness per parent — the partial unique indexes (§8). A race surfaces as `IntegrityError` → 409.
+- Referential integrity (`ON DELETE CASCADE`) — a parent deleted concurrently with a child write surfaces as a FK violation → 404.
 
-**What's protected by an advisory lock:** the tree-structure invariant itself (no cycles), because no constraint can express "no cycle in this self-referential FK". `update_department` (when `parent_id` is being changed) and `delete_department` (both modes) each start by acquiring a transaction-scoped PostgreSQL advisory lock on a single fixed key.
-
-`delete_department` takes the lock in **cascade mode too**, even though that path runs no BFS: without it, a concurrent `reassign`-mode delete elsewhere in the tree could still check "is the reassign target alive" before this transaction's cascade removes it, then commit into a target that no longer exists (an unhandled `IntegrityError` on commit, since `delete_department` has no `except IntegrityError` handling of its own). Serializing all delete/reparent transactions through the same lock means that check always runs against already-committed state.
+**Protected by an advisory lock:** the no-cycles invariant, since no constraint can express "no cycle in this self-referential FK". `update_department` (when `parent_id` changes) and `delete_department` (both modes) acquire a transaction-scoped `pg_advisory_xact_lock` on one fixed key:
 
 ```python
 _TREE_MUTATION_LOCK_KEY = 815_001
@@ -401,14 +366,11 @@ async def _lock_tree(db: AsyncSession) -> None:
     await db.execute(select(func.pg_advisory_xact_lock(_TREE_MUTATION_LOCK_KEY)))
 ```
 
-This serializes **all** tree-mutating transactions — a losing transaction blocks on `pg_advisory_xact_lock` until the winner commits or rolls back (`pg_advisory_xact_lock` auto-releases at transaction end, so no manual unlock is needed). Because PostgreSQL takes a fresh snapshot per statement under READ COMMITTED, the loser's subsequent `db.get`/BFS statements run *after* acquiring the lock and therefore see the winner's already-committed state — the BFS correctly finds the new cycle and raises `CycleDetectedError` (409), or a since-deleted department correctly raises `DepartmentNotFoundError` (404).
+The lock serializes all tree-mutating transactions: a loser blocks until the winner commits or rolls back, then its `db.get`/BFS statements run against the committed state — the BFS finds the new cycle → `CycleDetectedError` (409), or a since-deleted department → `DepartmentNotFoundError` (404). `delete_department` locks in cascade mode too, so a concurrent reassign can't check a target that a cascade is about to remove.
 
-**Why a single advisory lock instead of row-level locking (`SELECT ... FOR UPDATE`):** locking the specific rows involved in a reparent/delete would need a consistent lock order across the moved node, the new parent, and (for delete) the whole descendant subtree, to avoid deadlocks between two transactions locking the same rows in opposite order. A single fixed-key lock sidesteps ordering entirely and is trivially correct. The trade-off is full serialization of tree mutations — acceptable given how infrequent reparent/delete operations are relative to reads.
+**Trade-off:** a single fixed key sidesteps the deadlock risk of row-level locking (`SELECT … FOR UPDATE` would need a consistent lock order across the moved node, the new parent, and the whole subtree), at the cost of fully serializing tree mutations — acceptable given how infrequent reparent/delete are relative to reads.
 
-**What's deliberately left unprotected:** creating a department under a parent that is concurrently being deleted. This is not a tree-structure race (no cycle can result) — it is the ordinary FK race already handled in §3, surfacing as 404 rather than silently succeeding or 500ing.
-
-**What's also left unprotected:** creating an employee in a department that is concurrently being deleted with `mode=reassign`. `create_employee` does not take the tree lock, so the following interleaving is possible under the advisory lock: (1) reassign-delete acquires the lock, (2) reassign-delete runs `UPDATE employees SET department_id=…` to move existing employees, (3) `create_employee` INSERTs a new employee into the same department (no lock conflict — it never calls `_lock_tree`), (4) reassign-delete commits the `DELETE` which cascades to the new employee. The new employee is silently lost instead of being moved. The fix — making `create_employee` also acquire the tree lock — would serialize all employee creation against tree mutations, a trade-off too heavy for this edge case. This is accepted as a known compromise; in practice, reassign-delete is a rare administrative operation.
-
-**Delete racing an update of the same department:**
-- Reparent vs delete: `update_department` acquires the lock *before* its existence check whenever `parent_id` is being changed, so it serializes against any concurrent delete — the loser's `db.get` sees the committed deletion and raises a clean `DepartmentNotFoundError` (404).
-- Rename vs delete: rename-only requests deliberately take no tree lock (the name invariant is already covered by the unique indexes, §8), so the department can vanish between the fetch and the flush. SQLAlchemy surfaces the zero-row `UPDATE` as `StaleDataError`, which `update_department` maps to the same 404 instead of letting it escape as a 500.
+**Deliberately left unprotected (documented compromises):**
+- Creating a department under a concurrently-deleted parent — an ordinary FK race → 404 (§3), not a cycle.
+- `create_employee` takes no tree lock, so an employee inserted during a `reassign`-delete can be silently cascade-deleted instead of moved. Making it take the lock would serialize all employee creation against tree mutations — too heavy for this edge case.
+- Rename vs delete: rename-only requests take no lock (the name invariant is covered by the unique indexes, §8), so the row can vanish before the flush; the zero-row `UPDATE` surfaces as `StaleDataError`, mapped to 404.

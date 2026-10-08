@@ -54,7 +54,7 @@ services/   → Business logic: validation, cycle detection, cascade rules
 database.py → AsyncSession factory via get_db() dependency
 ```
 
-Services raise domain exceptions (`app/exceptions.py`). Routers catch them and convert to HTTP responses. Services have no knowledge of HTTP.
+Services raise domain exceptions (`app/exceptions.py`). `app/error_handlers.py` maps them to HTTP status codes in one place (registered in `main.py`); routers don't catch them. Services have no knowledge of HTTP.
 
 ```
 app/
@@ -63,11 +63,14 @@ app/
 ├── models.py        # SQLAlchemy ORM: Department, Employee
 ├── schemas.py       # Pydantic DTOs; field validators strip whitespace
 ├── exceptions.py    # Domain exceptions (DepartmentNotFound, CycleDetected, …)
+├── error_handlers.py # Domain exception → HTTP status mapping
 ├── routers/
 │   ├── departments.py
 │   └── employees.py
 └── services/
-    └── departments.py
+    ├── _pg.py       # SQLSTATE extraction from asyncpg IntegrityError
+    ├── departments.py
+    └── employees.py
 ```
 
 ## Key design decisions

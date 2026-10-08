@@ -2,7 +2,7 @@ FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-RUN pip install uv --no-cache-dir
+RUN pip install --no-cache-dir uv==0.12.11
 
 COPY pyproject.toml uv.lock ./
 

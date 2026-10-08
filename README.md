@@ -7,6 +7,10 @@ REST API for managing organizational structure: hierarchical departments and emp
 
 Design decisions and trade-offs are documented in [DECISIONS.md](DECISIONS.md).
 
+**How this was built.** Spec, ADRs and acceptance criteria are mine; implementation with Claude Code,
+every change reviewed by hand before commit. The agent configuration lives in
+[developer-os](https://github.com/FrostWillmott/developer-os).
+
 ## Technologies
 
 - **FastAPI** — async web framework
